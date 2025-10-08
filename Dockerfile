@@ -6,8 +6,7 @@ WORKDIR /app
 # Set environment variables
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
-    API_HOST=0.0.0.0 \
-    API_PORT=8000
+    PORT=8000
 
 # Install system dependencies
 RUN apt-get update && \
@@ -35,4 +34,4 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
     CMD python -c "import requests; requests.get('http://localhost:8000/health')" || exit 1
 
 # Run the application
-CMD ["uvicorn", "api:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD uvicorn api:app --host 0.0.0.0 --port ${PORT:-8000}
