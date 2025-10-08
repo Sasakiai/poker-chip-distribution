@@ -1,0 +1,41 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+.venv/
+venv/
+ENV/
+env/
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Documentation (optional - keep if you want docs in deployment)
+*.md
+!README.md
+
+# Git
+.git/
+.gitignore
+
+# Docker (we're using Railway's Docker build)
+docker-compose.yml
+
+# Development files
+example_usage.py
+test_api.py
+
+# OS
+.DS_Store
+Thumbs.db

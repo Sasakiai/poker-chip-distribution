@@ -1,0 +1,11 @@
+# FastAPI and server
+fastapi==0.104.1
+uvicorn[standard]==0.24.0
+pydantic==2.5.0
+
+# Optional: for production deployment
+gunicorn==21.2.0
+
+# Development (optional)
+pytest==7.4.3
+httpx==0.25.2
