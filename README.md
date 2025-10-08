@@ -1,3 +1,5 @@
+# this was fully drunk-vibe-coded with claude 4.5 i have no clue what's the math behind that, there's a lot of markdown docs so it explains something ig
+
 # Poker Chip Distribution Algorithm
 
 An intelligent algorithm for distributing poker chips based on player buy-ins and blind structure.
