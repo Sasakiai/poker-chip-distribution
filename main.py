@@ -160,6 +160,9 @@ def calculate_chip_distribution(
     """
     Calculate optimal chip distribution for a single player's stack.
 
+    Strategy: Prioritize lower denominations first (greedy from smallest to largest).
+    Only move to higher denominations when lower ones are exhausted or unavailable.
+
     Args:
         chips_needed: Total chip count needed for this player
         available_nominals: List of available chip nominals (sorted)
@@ -172,19 +175,30 @@ def calculate_chip_distribution(
     """
     distribution = {}
     remaining = chips_needed
-    sorted_nominals = sorted(available_nominals, reverse=True)
+    # Work from SMALLEST to LARGEST to prioritize lower denominations
+    sorted_nominals = sorted(available_nominals)
 
-    # Strategy: Work from largest to smallest, cap small denominations
-    # Standard poker distribution: fewer small chips, more large chips
+    # Define reasonable caps per denomination to avoid giving too many tiny chips
+    # while still prioritizing lower values
+    def get_max_chips_for_nominal(
+        nominal: int, position: int, total_nominals: int
+    ) -> int:
+        """Get maximum reasonable chips for this denomination."""
+        if total_nominals == 1:
+            return 100  # If only one denomination, allow many
 
-    # Find the appropriate "working denominations" - chips close to blind size
-    working_denom = None
-    if small_blind_chips:
-        for nominal in sorted_nominals:
-            if nominal >= small_blind_chips * 0.5 and nominal <= small_blind_chips * 4:
-                working_denom = nominal
-                break
+        if position == 0:  # Smallest denomination
+            return 30
+        elif position == 1:  # Second smallest
+            return 25
+        elif position == 2:  # Third smallest
+            return 20
+        elif position == total_nominals - 1:  # Largest denomination
+            return 15
+        else:  # Middle denominations
+            return 18
 
+    # Greedy approach: start with smallest denomination and work up
     for i, nominal in enumerate(sorted_nominals):
         if remaining < nominal:
             continue
@@ -195,87 +209,60 @@ def calculate_chip_distribution(
             total_available = available_inventory.get(nominal, 0)
             max_available_per_player = total_available // num_players
 
-        if i == 0:
-            # Largest denomination: 35-40% of stack
-            target_count = int(chips_needed * 0.35 / nominal)
-            count = min(
-                target_count, int(remaining / nominal), 8, int(max_available_per_player)
-            )
-        elif i == 1:
-            # Second largest: 25-30% of stack
-            target_count = int(chips_needed * 0.25 / nominal)
-            count = min(
-                target_count, int(remaining / nominal), 8, int(max_available_per_player)
-            )
-        elif i == 2:
-            # Third: 15-20% of stack
-            target_count = int(chips_needed * 0.15 / nominal)
-            count = min(
-                target_count,
-                int(remaining / nominal),
-                10,
-                int(max_available_per_player),
-            )
-        elif i == len(sorted_nominals) - 2:
-            # Second smallest: good for small bets (flexible for inventory)
-            if working_denom and nominal == working_denom:
-                count = min(20, int(remaining / nominal), int(max_available_per_player))
-            else:
-                count = min(18, int(remaining / nominal), int(max_available_per_player))
-        elif i == len(sorted_nominals) - 1:
-            # Smallest denomination: flexible based on inventory
-            count = min(25, int(remaining / nominal), int(max_available_per_player))
-        else:
-            # Middle denominations: more flexible
-            target_count = int(chips_needed * 0.10 / nominal)
-            count = min(
-                target_count,
-                int(remaining / nominal),
-                15,
-                int(max_available_per_player),
-            )
+        # Calculate how many of this denomination we can use
+        max_reasonable = get_max_chips_for_nominal(i, i, len(sorted_nominals))
+        max_from_remaining = int(remaining / nominal)
+
+        count = min(max_reasonable, max_from_remaining, int(max_available_per_player))
 
         if count > 0:
             distribution[nominal] = count
             remaining -= count * nominal
 
-    # If there's still remaining value, distribute flexibly
+    # If there's still remaining value after first pass, make a second pass
+    # to top off with any denomination that can help
     if remaining > 0:
-        for nominal in sorted_nominals[:-1]:  # Skip smallest
-            if remaining >= nominal:
-                max_available_per_player = float("inf")
-                if available_inventory:
-                    total_available = available_inventory.get(nominal, 0)
-                    already_used = distribution.get(nominal, 0) * num_players
-                    max_available_per_player = (
-                        total_available - already_used
-                    ) // num_players
+        for nominal in sorted_nominals:
+            if remaining < nominal:
+                continue
 
-                additional = min(
-                    10, int(remaining / nominal), int(max_available_per_player)
-                )
-                if additional > 0:
-                    distribution[nominal] = distribution.get(nominal, 0) + additional
-                    remaining -= additional * nominal
-                    if remaining < nominal:
-                        break
-
-        # If still remaining, use smallest denomination
-        if remaining > 0 and len(sorted_nominals) > 0:
-            smallest = sorted_nominals[-1]
+            # Check how much more we can add of this denomination
             max_available_per_player = float("inf")
             if available_inventory:
-                total_available = available_inventory.get(smallest, 0)
-                already_used = distribution.get(smallest, 0) * num_players
+                total_available = available_inventory.get(nominal, 0)
+                already_used = distribution.get(nominal, 0) * num_players
                 max_available_per_player = (
                     total_available - already_used
                 ) // num_players
 
+            # Allow a few more chips in second pass (up to 10 additional)
+            current_count = distribution.get(nominal, 0)
             additional = min(
-                int(math.ceil(remaining / smallest)), int(max_available_per_player)
+                10, int(remaining / nominal), int(max_available_per_player)
             )
+
             if additional > 0:
-                distribution[smallest] = distribution.get(smallest, 0) + additional
+                distribution[nominal] = current_count + additional
+                remaining -= additional * nominal
+
+                if remaining < nominal:
+                    break
+
+    # Final pass: if still remaining, round up with smallest denomination
+    if remaining > 0 and len(sorted_nominals) > 0:
+        smallest = sorted_nominals[0]
+        max_available_per_player = float("inf")
+        if available_inventory:
+            total_available = available_inventory.get(smallest, 0)
+            already_used = distribution.get(smallest, 0) * num_players
+            max_available_per_player = (total_available - already_used) // num_players
+
+        additional = min(
+            int(math.ceil(remaining / smallest)), int(max_available_per_player)
+        )
+
+        if additional > 0:
+            distribution[smallest] = distribution.get(smallest, 0) + additional
 
     return distribution
 
